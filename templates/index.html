@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block title %}Home - Document Scanning and OCR System{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h2 class="mb-0">Document Scanner</h2>
+            </div>
+            <div class="card-body">
+                <p class="lead text-center mb-4">
+                    Upload an image of a document (invoice, receipt, or handwritten note) to extract text and key data points.
+                </p>
+                
+                <form action="{{ url_for('upload_file') }}" method="post" enctype="multipart/form-data" class="mb-4">
+                    <div class="mb-3">
+                        <label for="file" class="form-label">Choose an image file:</label>
+                        <input type="file" class="form-control" id="file" name="file" accept=".png,.jpg,.jpeg,.gif,.bmp,.tiff,.tif,.pdf" required>
+                        <div class="form-text">
+                            Supported formats: PNG, JPG, JPEG, GIF, BMP, TIFF, TIF, PDF
+                        </div>
+                    </div>
+                    
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            <i class="bi bi-upload"></i> Upload and Process
+                        </button>
+                    </div>
+                </form>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">How it works</h5>
+                    </div>
+                    <div class="card-body">
+                        <ol class="mb-0">
+                            <li>Upload an image of your document</li>
+                            <li>The system preprocesses the image to improve OCR accuracy</li>
+                            <li>Tesseract OCR extracts text from the image</li>
+                            <li>Advanced parsing algorithms identify key data points</li>
+                            <li>Results are displayed, showing the extracted information</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Preview uploaded image before submission
+    document.getElementById('file').addEventListener('change', function(event) {
+        const file = event.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                // You could add image preview logic here if desired
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+</script>
+{% endblock %} 

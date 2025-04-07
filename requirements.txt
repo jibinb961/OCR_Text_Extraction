@@ -1,0 +1,7 @@
+Flask==2.3.3
+Werkzeug==2.3.7
+Pillow==10.0.0
+pytesseract==0.3.10
+regex==2023.8.8
+python-dateutil==2.8.2
+numpy==1.25.2 

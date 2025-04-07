@@ -1,0 +1,237 @@
+{% extends "base.html" %}
+
+{% block title %}Results - Document Scanning and OCR System{% endblock %}
+
+{% block extra_css %}
+<style>
+    .highlighted-text {
+        background-color: #fff8dc;
+        border-radius: 4px;
+        padding: 15px;
+        white-space: pre-wrap;
+        font-family: monospace;
+        max-height: 300px;
+        overflow-y: auto;
+    }
+    
+    .data-card {
+        transition: transform 0.2s;
+    }
+    
+    .data-card:hover {
+        transform: translateY(-5px);
+    }
+    
+    .image-container {
+        max-height: 500px;
+        overflow: hidden;
+    }
+    
+    .image-container img {
+        max-width: 100%;
+        height: auto;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h2 class="mb-3">OCR Results</h2>
+        <a href="{{ url_for('index') }}" class="btn btn-outline-primary mb-3">
+            <i class="bi bi-arrow-left"></i> Process Another Document
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Original and Processed Images -->
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <ul class="nav nav-tabs card-header-tabs" id="imageTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="original-tab" data-bs-toggle="tab" data-bs-target="#original" type="button" role="tab" aria-controls="original" aria-selected="true">Original</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="processed-tab" data-bs-toggle="tab" data-bs-target="#processed" type="button" role="tab" aria-controls="processed" aria-selected="false">Processed</button>
+                    </li>
+                </ul>
+            </div>
+            <div class="card-body">
+                <div class="tab-content" id="imageTabContent">
+                    <div class="tab-pane fade show active" id="original" role="tabpanel" aria-labelledby="original-tab">
+                        <div class="image-container text-center">
+                            <img src="{{ url_for('static', filename=original_path) }}" alt="Original Document" class="img-fluid">
+                        </div>
+                    </div>
+                    <div class="tab-pane fade" id="processed" role="tabpanel" aria-labelledby="processed-tab">
+                        <div class="image-container text-center">
+                            <img src="{{ url_for('static', filename=processed_path) }}" alt="Processed Document" class="img-fluid">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Extracted Text -->
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0">Extracted Text</h5>
+            </div>
+            <div class="card-body">
+                <div class="highlighted-text">{{ extracted_text }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <h3 class="mb-3">Extracted Data</h3>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Dates -->
+    {% if parsed_data.dates %}
+    <div class="col-md-4 mb-4">
+        <div class="card data-card h-100">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">Dates</h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-group list-group-flush">
+                    {% for date in parsed_data.dates %}
+                    <li class="list-group-item">
+                        <strong>{{ date.date_str }}</strong>
+                        <br><small class="text-muted">Parsed: {{ date.parsed }}</small>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- Amounts -->
+    {% if parsed_data.amounts %}
+    <div class="col-md-4 mb-4">
+        <div class="card data-card h-100">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">Amounts</h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-group list-group-flush">
+                    {% for amount in parsed_data.amounts %}
+                    <li class="list-group-item">
+                        <strong>{{ amount.amount_str }}</strong>
+                        <br><small class="text-muted">Value: {{ amount.numeric_value }} {{ amount.currency }}</small>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- Invoice Numbers -->
+    {% if parsed_data.invoice_numbers %}
+    <div class="col-md-4 mb-4">
+        <div class="card data-card h-100">
+            <div class="card-header bg-warning">
+                <h5 class="mb-0">Invoice Numbers</h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-group list-group-flush">
+                    {% for invoice in parsed_data.invoice_numbers %}
+                    <li class="list-group-item">
+                        <strong>{{ invoice.invoice_number }}</strong>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- Contacts (Emails & Phone Numbers) -->
+    {% if parsed_data.emails or parsed_data.phone_numbers %}
+    <div class="col-md-4 mb-4">
+        <div class="card data-card h-100">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Contact Information</h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-group list-group-flush">
+                    {% for email in parsed_data.emails %}
+                    <li class="list-group-item">
+                        <strong>Email:</strong> {{ email.email }}
+                    </li>
+                    {% endfor %}
+                    
+                    {% for phone in parsed_data.phone_numbers %}
+                    <li class="list-group-item">
+                        <strong>Phone:</strong> {{ phone.phone }}
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- Addresses -->
+    {% if parsed_data.addresses %}
+    <div class="col-md-4 mb-4">
+        <div class="card data-card h-100">
+            <div class="card-header bg-secondary text-white">
+                <h5 class="mb-0">Addresses</h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-group list-group-flush">
+                    {% for address in parsed_data.addresses %}
+                    <li class="list-group-item">
+                        {{ address.address }}
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- Item Descriptions -->
+    {% if parsed_data.item_descriptions %}
+    <div class="col-md-4 mb-4">
+        <div class="card data-card h-100">
+            <div class="card-header bg-dark text-white">
+                <h5 class="mb-0">Item Descriptions</h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-group list-group-flush">
+                    {% for item in parsed_data.item_descriptions %}
+                    <li class="list-group-item">
+                        <strong>{{ item.description }}</strong>
+                        <br><small class="text-muted">Price: {{ item.price }}</small>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Enable Bootstrap tooltips
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+</script>
+{% endblock %} 

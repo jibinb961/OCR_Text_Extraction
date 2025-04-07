@@ -1,0 +1,86 @@
+/* Custom styling for OCR System */
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f8f9fa;
+}
+
+.card {
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    border: none;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.card-header {
+    border-radius: 8px 8px 0 0 !important;
+    font-weight: 600;
+}
+
+.btn-primary {
+    background-color: #007bff;
+    border-color: #007bff;
+}
+
+.btn-primary:hover {
+    background-color: #0069d9;
+    border-color: #0062cc;
+}
+
+/* File input styling */
+.form-control:focus {
+    border-color: #80bdff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+/* Results page specific styling */
+.highlighted-text {
+    font-size: 0.9rem;
+    line-height: 1.5;
+    border: 1px solid #e0e0e0;
+}
+
+.image-container {
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    padding: 10px;
+    background-color: white;
+}
+
+.data-card {
+    box-shadow: 0 3px 5px rgba(0, 0, 0, 0.1);
+}
+
+.list-group-item {
+    border-left: none;
+    border-right: none;
+}
+
+/* Custom colors for data types */
+.bg-info {
+    background-color: #17a2b8 !important;
+}
+
+.bg-success {
+    background-color: #28a745 !important;
+}
+
+.bg-warning {
+    background-color: #ffc107 !important;
+    color: #212529;
+}
+
+.bg-primary {
+    background-color: #007bff !important;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .card-header h5 {
+        font-size: 1rem;
+    }
+    
+    .highlighted-text {
+        max-height: 200px;
+    }
+} 
