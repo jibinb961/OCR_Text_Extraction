@@ -16,6 +16,10 @@ from utils.parser import DataParser
 from datetime import timedelta
 import time
 import cv2
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -44,6 +48,10 @@ app.config['SESSION_COOKIE_NAME'] = 'ocr_scanner_session'
 app.config['SESSION_COOKIE_SECURE'] = False  # Set to True in production
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+
+# Check if Groq API key is set
+if not os.environ.get('GROQ_API_KEY'):
+    logger.warning("GROQ_API_KEY environment variable not set. LLM parsing will not work.")
 
 # Initialize OCR processor, image preprocessor, and data parser
 ocr_processor = OCRProcessor()

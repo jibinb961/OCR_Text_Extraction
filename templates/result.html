@@ -84,12 +84,32 @@
         margin-bottom: 20px;
     }
     
+    .invoice-metadata .column {
+        flex: 1;
+        max-width: 48%;
+    }
+    
     .invoice-metadata .item {
         margin-bottom: 8px;
     }
     
     .invoice-metadata .label {
         font-weight: bold;
+    }
+    
+    .no-data-message {
+        padding: 20px;
+        text-align: center;
+        color: #6c757d;
+        font-style: italic;
+    }
+    
+    .ai-processing-notice {
+        background-color: #e9f7fe;
+        border-left: 4px solid #29b6f6;
+        padding: 12px 15px;
+        margin-bottom: 20px;
+        border-radius: 4px;
     }
 </style>
 {% endblock %}
@@ -99,6 +119,10 @@
     <div class="row">
         <div class="col-12">
             <h2 class="mb-4">OCR Results</h2>
+            
+            <div class="ai-processing-notice">
+                <p class="mb-0"><strong>AI-Powered Analysis:</strong> This invoice has been analyzed using advanced AI to extract structured information.</p>
+            </div>
         </div>
     </div>
 
@@ -138,34 +162,27 @@
                 </div>
                 <div class="card-body">
                     <div class="invoice-metadata">
-                        <div class="left-column">
-                            {% if parsed_data.invoice_data.invoice_number %}
+                        <div class="column">
+                            {% for key, value in parsed_data.invoice_data.items() if key not in ['customer_address', 'vendor_address'] and value %}
                             <div class="item">
-                                <span class="label">Invoice Number:</span>
-                                <span>{{ parsed_data.invoice_data.invoice_number }}</span>
+                                <span class="label">{{ key|replace('_', ' ')|title }}:</span>
+                                <span>{{ value }}</span>
                             </div>
-                            {% endif %}
-                            
-                            {% if parsed_data.invoice_data.date %}
-                            <div class="item">
-                                <span class="label">Date:</span>
-                                <span>{{ parsed_data.invoice_data.date }}</span>
-                            </div>
-                            {% endif %}
-                            
-                            {% if parsed_data.invoice_data.due_date %}
-                            <div class="item">
-                                <span class="label">Due Date:</span>
-                                <span>{{ parsed_data.invoice_data.due_date }}</span>
-                            </div>
-                            {% endif %}
+                            {% endfor %}
                         </div>
                         
-                        <div class="right-column">
-                            {% if parsed_data.invoice_data.customer %}
+                        <div class="column">
+                            {% if parsed_data.invoice_data.customer_address %}
                             <div class="item">
-                                <span class="label">Customer:</span>
-                                <span>{{ parsed_data.invoice_data.customer }}</span>
+                                <span class="label">Customer Address:</span>
+                                <span>{{ parsed_data.invoice_data.customer_address|replace('\n', '<br>')|safe }}</span>
+                            </div>
+                            {% endif %}
+                            
+                            {% if parsed_data.invoice_data.vendor_address %}
+                            <div class="item">
+                                <span class="label">Vendor Address:</span>
+                                <span>{{ parsed_data.invoice_data.vendor_address|replace('\n', '<br>')|safe }}</span>
                             </div>
                             {% endif %}
                         </div>
@@ -203,17 +220,29 @@
                             {% endfor %}
                         </tbody>
                     </table>
-                    
-                    {% if parsed_data.summary_data %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    {% if parsed_data and parsed_data.summary_data %}
+    <!-- Summary Data -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Summary</h5>
+                </div>
+                <div class="card-body">
                     <table class="summary-table">
                         {% for item in parsed_data.summary_data %}
-                        <tr{% if 'total' in item.item.lower() or 'due' in item.item.lower() %} class="total-row"{% endif %}>
+                        <tr {% if 'total' in item.item|lower or 'due' in item.item|lower %} class="total-row"{% endif %}>
                             <td>{{ item.item }}</td>
-                            <td>${{ item.amount }}</td>
+                            <td>{{ item.amount }}</td>
                         </tr>
                         {% endfor %}
                     </table>
-                    {% endif %}
                 </div>
             </div>
         </div>
@@ -228,7 +257,7 @@
                     <h5 class="mb-0">Extracted Text</h5>
                 </div>
                 <div class="card-body">
-                    <pre class="extracted-text">{{ extracted_text }}</pre>
+                    <pre class="highlighted-text">{{ extracted_text }}</pre>
                 </div>
             </div>
         </div>
@@ -251,6 +280,20 @@
         </div>
     </div>
     {% endif %}
+    
+    <!-- Additional Developer Information (Debug) -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">JSON Output (Developer View)</h5>
+                </div>
+                <div class="card-body">
+                    <pre class="highlighted-text">{{ parsed_data|tojson(indent=2) }}</pre>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
