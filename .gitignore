@@ -24,6 +24,9 @@ wheels/
 .installed.cfg
 *.egg
 
+# progres tracker
+progress_tracker.md
+
 # Virtual Environment
 venv/
 ENV/
