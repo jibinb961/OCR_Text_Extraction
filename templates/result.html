@@ -37,6 +37,60 @@
         margin-top: 10px;
         color: #6c757d;
     }
+    
+    .invoice-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 20px;
+    }
+    
+    .invoice-table th, .invoice-table td {
+        border: 1px solid #dee2e6;
+        padding: 8px;
+        text-align: left;
+    }
+    
+    .invoice-table th {
+        background-color: #f8f9fa;
+        font-weight: bold;
+    }
+    
+    .invoice-table tr:nth-child(even) {
+        background-color: #f8f9fa;
+    }
+    
+    .summary-table {
+        width: 40%;
+        margin-left: auto;
+        border-collapse: collapse;
+    }
+    
+    .summary-table td {
+        padding: 4px 8px;
+    }
+    
+    .summary-table tr.total-row {
+        font-weight: bold;
+        border-top: 2px solid #dee2e6;
+    }
+    
+    .summary-table td:last-child {
+        text-align: right;
+    }
+    
+    .invoice-metadata {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 20px;
+    }
+    
+    .invoice-metadata .item {
+        margin-bottom: 8px;
+    }
+    
+    .invoice-metadata .label {
+        font-weight: bold;
+    }
 </style>
 {% endblock %}
 
@@ -74,8 +128,100 @@
         </div>
     </div>
 
+    {% if parsed_data and parsed_data.invoice_data %}
+    <!-- Invoice Metadata -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Invoice Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="invoice-metadata">
+                        <div class="left-column">
+                            {% if parsed_data.invoice_data.invoice_number %}
+                            <div class="item">
+                                <span class="label">Invoice Number:</span>
+                                <span>{{ parsed_data.invoice_data.invoice_number }}</span>
+                            </div>
+                            {% endif %}
+                            
+                            {% if parsed_data.invoice_data.date %}
+                            <div class="item">
+                                <span class="label">Date:</span>
+                                <span>{{ parsed_data.invoice_data.date }}</span>
+                            </div>
+                            {% endif %}
+                            
+                            {% if parsed_data.invoice_data.due_date %}
+                            <div class="item">
+                                <span class="label">Due Date:</span>
+                                <span>{{ parsed_data.invoice_data.due_date }}</span>
+                            </div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="right-column">
+                            {% if parsed_data.invoice_data.customer %}
+                            <div class="item">
+                                <span class="label">Customer:</span>
+                                <span>{{ parsed_data.invoice_data.customer }}</span>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if parsed_data and parsed_data.table_data and parsed_data.table_data.headers and parsed_data.table_data.rows %}
+    <!-- Invoice Table -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Invoice Items</h5>
+                </div>
+                <div class="card-body">
+                    <table class="invoice-table">
+                        <thead>
+                            <tr>
+                                {% for header in parsed_data.table_data.headers %}
+                                <th>{{ header }}</th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in parsed_data.table_data.rows %}
+                            <tr>
+                                {% for header in parsed_data.table_data.headers %}
+                                <td>{{ row[header] if header in row else '' }}</td>
+                                {% endfor %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    
+                    {% if parsed_data.summary_data %}
+                    <table class="summary-table">
+                        {% for item in parsed_data.summary_data %}
+                        <tr{% if 'total' in item.item.lower() or 'due' in item.item.lower() %} class="total-row"{% endif %}>
+                            <td>{{ item.item }}</td>
+                            <td>${{ item.amount }}</td>
+                        </tr>
+                        {% endfor %}
+                    </table>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Extracted Text -->
-    <div class="row">
+    <div class="row mt-4">
         <div class="col-12">
             <div class="card">
                 <div class="card-header">

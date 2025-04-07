@@ -174,17 +174,25 @@ def result(process_id):
         
         # Read the processed image and extract text
         processed_image = cv2.imread(os.path.join(app.config['PROCESSED_FOLDER'], processed_filename))
+        if processed_image is None:
+            flash('Error reading processed image')
+            return redirect(url_for('index'))
+            
         extracted_text = ocr_processor.extract_text_from_image(processed_image)
         
-        # Parse the text
+        # Parse the text and extract structured data
         parsed_data = data_parser.parse_text(extracted_text)
+        
+        # Check if deskew was enabled (based on filename)
+        deskew_enabled = 'enable_deskew' in request.args or 'deskew' not in request.args.get('disable_features', '')
         
         return render_template(
             'result.html',
             original_path=original_path,
             processed_path=processed_path,
             extracted_text=extracted_text,
-            deskew_enabled=True  # We'll determine this from the filename if needed
+            parsed_data=parsed_data,
+            deskew_enabled=deskew_enabled
         )
     except Exception as e:
         logger.error(f"Error displaying results: {e}")
