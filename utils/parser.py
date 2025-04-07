@@ -301,15 +301,17 @@ class DataParser:
             text (str): Text to extract item descriptions from.
             
         Returns:
-            list: List of extracted item descriptions.
+            list: List of extracted item descriptions with quantities and prices.
         """
         try:
             # Split text into lines
             lines = text.split('\n')
             items = []
             
-            # Pattern for price
+            # Patterns for different parts of an invoice line
             price_pattern = r'\d+(?:,\d{3})*(?:\.\d{2})?'
+            quantity_pattern = r'\b\d+(?:\.\d+)?\b'
+            unit_pattern = r'\b(pc|pcs|kg|g|lb|lbs|oz|ml|l|gal|each|ea)\b'
             
             for line in lines:
                 # Skip short lines
@@ -322,11 +324,42 @@ class DataParser:
                     price_str = price_match.group()
                     price_start, price_end = price_match.span()
                     
+                    # Look for quantity and unit
+                    quantity_match = re.search(quantity_pattern, line)
+                    unit_match = re.search(unit_pattern, line, re.IGNORECASE)
+                    
                     # Extract item description (text before the price)
                     description = line[:price_start].strip()
+                    
+                    # If we found a quantity, try to separate it from the description
+                    if quantity_match:
+                        qty_start, qty_end = quantity_match.span()
+                        if qty_start < price_start:  # Quantity is before price
+                            quantity = quantity_match.group()
+                            # Remove quantity from description
+                            description = description[:qty_start].strip() + description[qty_end:].strip()
+                        else:
+                            quantity = None
+                    else:
+                        quantity = None
+                    
+                    # If we found a unit, try to separate it from the description
+                    if unit_match:
+                        unit_start, unit_end = unit_match.span()
+                        if unit_start < price_start:  # Unit is before price
+                            unit = unit_match.group()
+                            # Remove unit from description
+                            description = description[:unit_start].strip() + description[unit_end:].strip()
+                        else:
+                            unit = None
+                    else:
+                        unit = None
+                    
                     if description:
                         items.append({
                             'description': description,
+                            'quantity': quantity,
+                            'unit': unit,
                             'price': price_str,
                             'line': line.strip()
                         })

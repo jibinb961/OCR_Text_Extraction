@@ -102,11 +102,18 @@ def upload_file():
             processed_path = os.path.join(app.config['PROCESSED_FOLDER'], f"processed_{unique_filename}")
             image_preprocessor.save_image(processed_image, processed_path)
             
-            # Extract text from processed image
+            # Extract structured data from processed image
+            structured_data = ocr_processor.extract_structured_data(processed_image)
+            
+            # Extract plain text for basic parsing
             extracted_text = ocr_processor.extract_text_from_image(processed_image)
             
             # Parse the text to extract structured data
             parsed_data = data_parser.parse_text(extracted_text)
+            
+            # Add structured data to parsed results
+            parsed_data['tables'] = structured_data.get('tables', [])
+            parsed_data['lines'] = structured_data.get('lines', [])
             
             # Save the data in session for the result page
             session['file_id'] = file_id

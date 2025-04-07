@@ -9,6 +9,8 @@ import pytesseract
 import os
 from PIL import Image
 import logging
+import numpy as np
+import cv2
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -94,12 +96,139 @@ class OCRProcessor:
         """
         try:
             # Extract data with hOCR format (HTML with position info)
-            hocr_data = pytesseract.image_to_data(image, output_type=pytesseract.Output.DICT)
+            data = pytesseract.image_to_data(image, output_type=pytesseract.Output.DICT)
+            
+            # Process the data to identify tables and structured content
+            processed_data = self._process_structured_data(data)
             
             # Log success
             logger.info("Successfully extracted structured data from image")
             
-            return hocr_data
+            return processed_data
         except Exception as e:
             logger.error(f"Error extracting structured data: {e}")
-            return {} 
+            return {}
+    
+    def _process_structured_data(self, data):
+        """
+        Process the raw OCR data to identify tables and structured content.
+        
+        Args:
+            data (dict): Raw OCR data from Tesseract.
+            
+        Returns:
+            dict: Processed structured data.
+        """
+        try:
+            # Initialize result dictionary
+            result = {
+                'text_blocks': [],
+                'tables': [],
+                'lines': []
+            }
+            
+            # Group words into lines based on y-coordinates
+            current_line = []
+            current_y = None
+            line_height = None
+            
+            for i in range(len(data['text'])):
+                text = data['text'][i].strip()
+                if not text:
+                    continue
+                
+                x = data['left'][i]
+                y = data['top'][i]
+                w = data['width'][i]
+                h = data['height'][i]
+                conf = data['conf'][i]
+                
+                # If this is the first word or close to the current line
+                if current_y is None or abs(y - current_y) < h * 0.5:
+                    if current_y is None:
+                        current_y = y
+                        line_height = h
+                    current_line.append({
+                        'text': text,
+                        'x': x,
+                        'y': y,
+                        'width': w,
+                        'height': h,
+                        'confidence': conf
+                    })
+                else:
+                    # Start a new line
+                    if current_line:
+                        result['lines'].append(current_line)
+                    current_line = [{
+                        'text': text,
+                        'x': x,
+                        'y': y,
+                        'width': w,
+                        'height': h,
+                        'confidence': conf
+                    }]
+                    current_y = y
+                    line_height = h
+            
+            # Add the last line
+            if current_line:
+                result['lines'].append(current_line)
+            
+            # Identify potential tables
+            result['tables'] = self._identify_tables(result['lines'])
+            
+            return result
+        except Exception as e:
+            logger.error(f"Error processing structured data: {e}")
+            return {}
+    
+    def _identify_tables(self, lines):
+        """
+        Identify potential tables in the OCR data.
+        
+        Args:
+            lines (list): List of lines, each containing word data.
+            
+        Returns:
+            list: Identified tables.
+        """
+        try:
+            tables = []
+            current_table = []
+            
+            # Sort lines by y-coordinate
+            sorted_lines = sorted(lines, key=lambda line: line[0]['y'])
+            
+            for line in sorted_lines:
+                # Check if this line has multiple columns (words with significant x-gaps)
+                words = sorted(line, key=lambda word: word['x'])
+                if len(words) > 1:
+                    # Calculate average gap between words
+                    gaps = []
+                    for i in range(len(words) - 1):
+                        gap = words[i + 1]['x'] - (words[i]['x'] + words[i]['width'])
+                        gaps.append(gap)
+                    
+                    avg_gap = sum(gaps) / len(gaps) if gaps else 0
+                    
+                    # If gaps are significant, this might be a table row
+                    if avg_gap > 20:  # Threshold for column separation
+                        current_table.append(line)
+                    else:
+                        if current_table:
+                            tables.append(current_table)
+                            current_table = []
+                else:
+                    if current_table:
+                        tables.append(current_table)
+                        current_table = []
+            
+            # Add the last table if exists
+            if current_table:
+                tables.append(current_table)
+            
+            return tables
+        except Exception as e:
+            logger.error(f"Error identifying tables: {e}")
+            return [] 

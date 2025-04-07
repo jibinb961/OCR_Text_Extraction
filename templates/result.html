@@ -243,6 +243,80 @@
     </div>
     {% endif %}
 </div>
+
+<!-- Add this section after the existing data cards -->
+{% if parsed_data.tables %}
+<div class="row mt-4">
+    <div class="col-12">
+        <h3 class="mb-3">Detected Tables</h3>
+    </div>
+</div>
+
+<div class="row">
+    {% for table in parsed_data.tables %}
+    <div class="col-12 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Table {{ loop.index }}</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered">
+                        {% for row in table %}
+                        <tr>
+                            {% for word in row %}
+                            <td>{{ word.text }}</td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Add this section for invoice line items -->
+{% if parsed_data.item_descriptions %}
+<div class="row mt-4">
+    <div class="col-12">
+        <h3 class="mb-3">Invoice Line Items</h3>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered">
+                        <thead>
+                            <tr>
+                                <th>Description</th>
+                                <th>Quantity</th>
+                                <th>Unit</th>
+                                <th>Price</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in parsed_data.item_descriptions %}
+                            <tr>
+                                <td>{{ item.description }}</td>
+                                <td>{{ item.quantity or '' }}</td>
+                                <td>{{ item.unit or '' }}</td>
+                                <td>{{ item.price }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}
