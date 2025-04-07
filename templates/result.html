@@ -31,6 +31,12 @@
         max-width: 100%;
         height: auto;
     }
+    
+    .processing-info {
+        font-size: 0.9rem;
+        margin-top: 10px;
+        color: #6c757d;
+    }
 </style>
 {% endblock %}
 
@@ -41,6 +47,19 @@
         <a href="{{ url_for('index') }}" class="btn btn-outline-primary mb-3">
             <i class="bi bi-arrow-left"></i> Process Another Document
         </a>
+        
+        <div class="processing-info">
+            <strong>Processing options:</strong> Deskewing was {% if deskew_enabled %}enabled{% else %}disabled{% endif %}
+            {% if deskew_enabled %}
+            <form action="{{ url_for('upload_file') }}" method="post" enctype="multipart/form-data" class="mt-2">
+                <input type="hidden" name="file" value="{{ original_path }}">
+                <input type="hidden" name="enable_deskew" value="off">
+                <button type="submit" class="btn btn-sm btn-outline-secondary">
+                    Try processing without deskewing
+                </button>
+            </form>
+            {% endif %}
+        </div>
     </div>
 </div>
 

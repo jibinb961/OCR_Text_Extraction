@@ -192,15 +192,36 @@ class ImagePreprocessor:
             # Find largest contour
             contours = sorted(contours, key=cv2.contourArea, reverse=True)
             if not contours:
+                logger.info("No contours found for deskewing, returning original image")
                 return image
             
             # Get rotated rectangle of largest contour
             rect = cv2.minAreaRect(contours[0])
             angle = rect[2]
             
-            # Adjust angle
-            if angle < -45:
-                angle = 90 + angle
+            # Improved angle adjustment logic
+            # OpenCV's minAreaRect returns angles in the range [-90, 0)
+            # We need to determine if we need to correct the orientation
+            
+            # First check if the angle is significant enough to warrant correction
+            # Only rotate if the angle is more than 5 degrees off horizontal/vertical
+            if abs(angle) < 5 or abs(angle + 90) < 5:
+                logger.info(f"Image is already well-aligned (angle: {angle:.2f}), skipping deskew")
+                return image
+                
+            # Correct the angle based on aspect ratio to avoid incorrect 90 degree rotations
+            width, height = rect[1]
+            if width < height:
+                # If width < height, we're looking at a rectangle in portrait orientation
+                if angle < -45:
+                    angle = 90 + angle
+            else:
+                # Width >= height, we're looking at a rectangle in landscape orientation
+                # Adjust angle to preserve the correct orientation
+                if angle >= -45:
+                    angle = angle
+                else:
+                    angle = 90 + angle
             
             # Rotate image
             (h, w) = image.shape[:2]

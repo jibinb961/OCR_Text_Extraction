@@ -75,6 +75,9 @@ def upload_file():
         return redirect(request.url)
     
     try:
+        # Get processing options from form
+        enable_deskew = request.form.get('enable_deskew', 'off') == 'on'
+        
         # Secure the filename and generate a unique ID
         file_id = str(uuid.uuid4())
         filename = secure_filename(file.filename)
@@ -87,7 +90,14 @@ def upload_file():
         logger.info(f"Saved uploaded file to {original_path}")
         
         # Process the image and save the processed version
-        processed_image = image_preprocessor.process_image(original_path)
+        processed_image = image_preprocessor.process_image(
+            original_path, 
+            resize=True, 
+            denoise=True, 
+            deskew_image=enable_deskew,
+            threshold_method='adaptive'
+        )
+        
         if processed_image is not None:
             processed_path = os.path.join(app.config['PROCESSED_FOLDER'], f"processed_{unique_filename}")
             image_preprocessor.save_image(processed_image, processed_path)
@@ -104,6 +114,7 @@ def upload_file():
             session['processed_path'] = os.path.join('processed', f"processed_{unique_filename}")
             session['extracted_text'] = extracted_text
             session['parsed_data'] = parsed_data
+            session['deskew_enabled'] = enable_deskew
             
             # Redirect to result page
             return redirect(url_for('result', file_id=file_id))
@@ -136,13 +147,15 @@ def result(file_id):
         processed_path = session.get('processed_path')
         extracted_text = session.get('extracted_text')
         parsed_data = session.get('parsed_data')
+        deskew_enabled = session.get('deskew_enabled', True)
         
         return render_template(
             'result.html',
             original_path=original_path,
             processed_path=processed_path,
             extracted_text=extracted_text,
-            parsed_data=parsed_data
+            parsed_data=parsed_data,
+            deskew_enabled=deskew_enabled
         )
     except Exception as e:
         logger.error(f"Error displaying result: {e}")
@@ -172,6 +185,9 @@ def api_extract():
         if not file or not allowed_file(file.filename):
             return jsonify({'error': 'File type not allowed'}), 400
         
+        # Get processing options
+        enable_deskew = request.form.get('enable_deskew', 'true').lower() == 'true'
+        
         # Secure the filename and generate a unique ID
         file_id = str(uuid.uuid4())
         filename = secure_filename(file.filename)
@@ -183,7 +199,14 @@ def api_extract():
         file.save(original_path)
         
         # Process the image
-        processed_image = image_preprocessor.process_image(original_path)
+        processed_image = image_preprocessor.process_image(
+            original_path,
+            resize=True,
+            denoise=True,
+            deskew_image=enable_deskew,
+            threshold_method='adaptive'
+        )
+        
         if processed_image is not None:
             # Extract text from processed image
             extracted_text = ocr_processor.extract_text_from_image(processed_image)
@@ -194,7 +217,8 @@ def api_extract():
             return jsonify({
                 'file_id': file_id,
                 'extracted_text': extracted_text,
-                'parsed_data': parsed_data
+                'parsed_data': parsed_data,
+                'deskew_enabled': enable_deskew
             })
         else:
             return jsonify({'error': 'Error processing image'}), 500
