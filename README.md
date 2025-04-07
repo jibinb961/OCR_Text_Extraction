@@ -23,6 +23,26 @@ A Python-based application for scanning invoices and extracting structured data 
   - Clear presentation of extracted data
   - Original and processed image comparison
 
+## Screenshots
+
+Here are some screenshots demonstrating the application's features:
+
+### Home Page
+![Home Page](snapshots/home_page.png)
+*The application's home page featuring the upload form and instructions.*
+
+### Processed Image Result
+![Processed Image Result](snapshots/processed_image_result.png)
+*Side-by-side comparison of original and processed images with enhanced clarity for OCR.*
+
+### Text Extraction
+![Text Extraction](snapshots/extracted_text_using_tesseract.png)
+*Raw text extraction from the processed image using Tesseract OCR.*
+
+### Structured Data Extraction
+![Structured Data](snapshots/processed_table_with_llm.png)
+*AI-powered extraction of structured invoice data including tables and totals.*
+
 ## Requirements
 
 - Python 3.8+
@@ -110,6 +130,8 @@ ocr-document-scanner/
 │   ├── ocr.py           # OCR functionality
 │   ├── preprocessing.py # Image preprocessing
 │   └── parser.py        # AI-powered data parsing
+│
+└── snapshots/           # Application screenshots
 ```
 
 ## API Integration
