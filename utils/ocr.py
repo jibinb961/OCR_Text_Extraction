@@ -11,6 +11,7 @@ from PIL import Image
 import logging
 import numpy as np
 import cv2
+import re
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -23,13 +24,10 @@ class OCRProcessor:
         
         Args:
             tesseract_cmd (str, optional): Path to the Tesseract executable.
-                If not provided, it will use the default system path.
         """
-        # Configure Tesseract path if provided
         if tesseract_cmd:
             pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
         
-        # Verify Tesseract is installed
         try:
             pytesseract.get_tesseract_version()
             logger.info("Tesseract OCR is properly configured.")
@@ -86,149 +84,218 @@ class OCRProcessor:
     
     def extract_structured_data(self, image):
         """
-        Extract structured data like tables from an image.
+        Extract structured data from an image with detailed position information.
         
         Args:
-            image: The image (PIL.Image or numpy array).
+            image: PIL Image or numpy array
             
         Returns:
-            dict: Structured data extracted from the image.
+            dict: Structured data including lines, words, and their positions
         """
         try:
-            # Extract data with hOCR format (HTML with position info)
+            # Get detailed OCR data including positions
             data = pytesseract.image_to_data(image, output_type=pytesseract.Output.DICT)
             
-            # Process the data to identify tables and structured content
-            processed_data = self._process_structured_data(data)
+            # Process the data to identify lines and their structure
+            processed_data = self._process_ocr_data(data)
             
-            # Log success
-            logger.info("Successfully extracted structured data from image")
+            # Analyze line content to identify potential tables and line items
+            tables = self._analyze_line_items(processed_data['lines'])
             
-            return processed_data
+            return {
+                'lines': processed_data['lines'],
+                'tables': tables,
+                'raw_data': data
+            }
         except Exception as e:
             logger.error(f"Error extracting structured data: {e}")
-            return {}
+            return {'lines': [], 'tables': [], 'raw_data': {}}
     
-    def _process_structured_data(self, data):
+    def _process_ocr_data(self, data):
         """
-        Process the raw OCR data to identify tables and structured content.
+        Process raw OCR data to group words into lines and analyze their structure.
         
         Args:
-            data (dict): Raw OCR data from Tesseract.
+            data (dict): Raw OCR data from Tesseract
             
         Returns:
-            dict: Processed structured data.
+            dict: Processed data with lines and their structure
         """
-        try:
-            # Initialize result dictionary
-            result = {
-                'text_blocks': [],
-                'tables': [],
-                'lines': []
-            }
-            
-            # Group words into lines based on y-coordinates
-            current_line = []
-            current_y = None
-            line_height = None
-            
-            for i in range(len(data['text'])):
-                text = data['text'][i].strip()
-                if not text:
-                    continue
+        lines = []
+        current_line = []
+        current_y = None
+        line_height = None
+        
+        # Process each word
+        for i in range(len(data['text'])):
+            text = data['text'][i].strip()
+            if not text:
+                continue
                 
-                x = data['left'][i]
-                y = data['top'][i]
-                w = data['width'][i]
-                h = data['height'][i]
-                conf = data['conf'][i]
-                
-                # If this is the first word or close to the current line
-                if current_y is None or abs(y - current_y) < h * 0.5:
-                    if current_y is None:
-                        current_y = y
-                        line_height = h
-                    current_line.append({
-                        'text': text,
-                        'x': x,
-                        'y': y,
-                        'width': w,
-                        'height': h,
-                        'confidence': conf
-                    })
-                else:
-                    # Start a new line
-                    if current_line:
-                        result['lines'].append(current_line)
-                    current_line = [{
-                        'text': text,
-                        'x': x,
-                        'y': y,
-                        'width': w,
-                        'height': h,
-                        'confidence': conf
-                    }]
+            x = data['left'][i]
+            y = data['top'][i]
+            w = data['width'][i]
+            h = data['height'][i]
+            conf = data['conf'][i]
+            
+            # If this is the first word or close to the current line
+            if current_y is None or abs(y - current_y) < h * 0.5:
+                if current_y is None:
                     current_y = y
                     line_height = h
-            
-            # Add the last line
-            if current_line:
-                result['lines'].append(current_line)
-            
-            # Identify potential tables
-            result['tables'] = self._identify_tables(result['lines'])
-            
-            return result
-        except Exception as e:
-            logger.error(f"Error processing structured data: {e}")
-            return {}
+                current_line.append({
+                    'text': text,
+                    'x': x,
+                    'y': y,
+                    'width': w,
+                    'height': h,
+                    'confidence': conf
+                })
+            else:
+                # Start a new line
+                if current_line:
+                    lines.append(self._analyze_line_structure(current_line))
+                current_line = [{
+                    'text': text,
+                    'x': x,
+                    'y': y,
+                    'width': w,
+                    'height': h,
+                    'confidence': conf
+                }]
+                current_y = y
+                line_height = h
+        
+        # Add the last line
+        if current_line:
+            lines.append(self._analyze_line_structure(current_line))
+        
+        return {'lines': lines}
     
-    def _identify_tables(self, lines):
+    def _analyze_line_structure(self, words):
         """
-        Identify potential tables in the OCR data.
+        Analyze the structure of a line to identify potential columns and data types.
         
         Args:
-            lines (list): List of lines, each containing word data.
+            words (list): List of words in a line with their positions
             
         Returns:
-            list: Identified tables.
+            dict: Analyzed line structure
         """
-        try:
-            tables = []
-            current_table = []
+        # Sort words by x position
+        sorted_words = sorted(words, key=lambda w: w['x'])
+        
+        # Identify potential data types
+        line_data = {
+            'words': sorted_words,
+            'text': ' '.join(w['text'] for w in sorted_words),
+            'columns': [],
+            'indentation': sorted_words[0]['x'] if sorted_words else 0
+        }
+        
+        # Analyze each word for potential data types
+        for word in sorted_words:
+            text = word['text']
             
-            # Sort lines by y-coordinate
-            sorted_lines = sorted(lines, key=lambda line: line[0]['y'])
-            
-            for line in sorted_lines:
-                # Check if this line has multiple columns (words with significant x-gaps)
-                words = sorted(line, key=lambda word: word['x'])
-                if len(words) > 1:
-                    # Calculate average gap between words
-                    gaps = []
-                    for i in range(len(words) - 1):
-                        gap = words[i + 1]['x'] - (words[i]['x'] + words[i]['width'])
-                        gaps.append(gap)
-                    
-                    avg_gap = sum(gaps) / len(gaps) if gaps else 0
-                    
-                    # If gaps are significant, this might be a table row
-                    if avg_gap > 20:  # Threshold for column separation
-                        current_table.append(line)
-                    else:
-                        if current_table:
-                            tables.append(current_table)
-                            current_table = []
+            # Check for numbers
+            if re.match(r'^\d+(?:\.\d{1,2})?$', text):
+                word['type'] = 'number'
+                # Try to determine if it's a quantity, price, or serial number
+                if '.' in text:
+                    word['subtype'] = 'price'
+                elif len(text) <= 2:
+                    word['subtype'] = 'quantity'
                 else:
-                    if current_table:
-                        tables.append(current_table)
-                        current_table = []
+                    word['subtype'] = 'serial'
+            else:
+                word['type'] = 'text'
+                word['subtype'] = 'description'
+        
+        # Group words into potential columns based on spacing
+        if sorted_words:
+            current_column = [sorted_words[0]]
+            for i in range(1, len(sorted_words)):
+                prev_word = sorted_words[i-1]
+                current_word = sorted_words[i]
+                
+                # Calculate gap between words
+                gap = current_word['x'] - (prev_word['x'] + prev_word['width'])
+                
+                # If gap is significant, start a new column
+                if gap > prev_word['width'] * 0.5:
+                    line_data['columns'].append(current_column)
+                    current_column = [current_word]
+                else:
+                    current_column.append(current_word)
             
-            # Add the last table if exists
-            if current_table:
-                tables.append(current_table)
+            line_data['columns'].append(current_column)
+        
+        return line_data
+    
+    def _analyze_line_items(self, lines):
+        """
+        Analyze lines to identify potential line items and their relationships.
+        
+        Args:
+            lines (list): List of analyzed lines
             
-            return tables
-        except Exception as e:
-            logger.error(f"Error identifying tables: {e}")
-            return [] 
+        Returns:
+            list: Identified tables with line items
+        """
+        tables = []
+        current_table = []
+        current_indent = None
+        
+        for line in lines:
+            # Check if this line is indented (potential sub-line)
+            if current_indent is not None and line['indentation'] > current_indent + 20:
+                # This is a sub-line of the previous line
+                if current_table:
+                    current_table[-1]['sub_lines'].append(line)
+                continue
+            
+            # Check if this line looks like a line item
+            if self._is_line_item(line):
+                if not current_table:
+                    current_table = []
+                    current_indent = line['indentation']
+                current_table.append({
+                    'line': line,
+                    'sub_lines': []
+                })
+            else:
+                # If we have a table and this line doesn't match, end the current table
+                if current_table:
+                    tables.append(current_table)
+                    current_table = []
+                    current_indent = None
+        
+        # Add the last table if exists
+        if current_table:
+            tables.append(current_table)
+        
+        return tables
+    
+    def _is_line_item(self, line):
+        """
+        Determine if a line looks like a line item.
+        
+        Args:
+            line (dict): Analyzed line structure
+            
+        Returns:
+            bool: True if the line appears to be a line item
+        """
+        # A line item typically has:
+        # 1. At least one number (price or quantity)
+        # 2. Some descriptive text
+        has_number = False
+        has_text = False
+        
+        for word in line['words']:
+            if word['type'] == 'number':
+                has_number = True
+            elif word['type'] == 'text':
+                has_text = True
+        
+        return has_number and has_text 

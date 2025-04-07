@@ -13,6 +13,9 @@ import json
 from utils.ocr import OCRProcessor
 from utils.preprocessing import ImagePreprocessor
 from utils.parser import DataParser
+from datetime import timedelta
+import time
+import cv2
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -35,18 +38,38 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['PROCESSED_FOLDER'] = PROCESSED_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16 MB max file size
 
+# Configure session settings
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=1)  # Session lasts for 1 day
+app.config['SESSION_COOKIE_NAME'] = 'ocr_scanner_session'
+app.config['SESSION_COOKIE_SECURE'] = False  # Set to True in production
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+
 # Initialize OCR processor, image preprocessor, and data parser
 ocr_processor = OCRProcessor()
 image_preprocessor = ImagePreprocessor()
 data_parser = DataParser()
 
 def allowed_file(filename):
-    """Check if a file has an allowed extension."""
+    """
+    Check if the file extension is allowed.
+    
+    Args:
+        filename (str): Name of the file to check.
+        
+    Returns:
+        bool: True if the file extension is allowed, False otherwise.
+    """
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 @app.route('/')
 def index():
-    """Render the home page."""
+    """
+    Render the upload form.
+    
+    Returns:
+        Rendered template with the upload form.
+    """
     return render_template('index.html')
 
 @app.route('/upload', methods=['POST'])
@@ -78,14 +101,17 @@ def upload_file():
         # Get processing options from form
         enable_deskew = request.form.get('enable_deskew', 'off') == 'on'
         
-        # Secure the filename and generate a unique ID
-        file_id = str(uuid.uuid4())
+        # Generate unique ID for this processing session
+        process_id = str(uuid.uuid4())
+        
+        # Secure the filename and generate unique filenames
         filename = secure_filename(file.filename)
         base_filename, ext = os.path.splitext(filename)
-        unique_filename = f"{base_filename}_{file_id}{ext}"
+        original_filename = f"{base_filename}_{process_id}{ext}"
+        processed_filename = f"processed_{base_filename}_{process_id}{ext}"
         
         # Save the original file
-        original_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
+        original_path = os.path.join(app.config['UPLOAD_FOLDER'], original_filename)
         file.save(original_path)
         logger.info(f"Saved uploaded file to {original_path}")
         
@@ -99,32 +125,17 @@ def upload_file():
         )
         
         if processed_image is not None:
-            processed_path = os.path.join(app.config['PROCESSED_FOLDER'], f"processed_{unique_filename}")
+            processed_path = os.path.join(app.config['PROCESSED_FOLDER'], processed_filename)
             image_preprocessor.save_image(processed_image, processed_path)
             
-            # Extract structured data from processed image
-            structured_data = ocr_processor.extract_structured_data(processed_image)
-            
-            # Extract plain text for basic parsing
+            # Extract text from processed image
             extracted_text = ocr_processor.extract_text_from_image(processed_image)
             
-            # Parse the text to extract structured data
+            # Parse the text
             parsed_data = data_parser.parse_text(extracted_text)
             
-            # Add structured data to parsed results
-            parsed_data['tables'] = structured_data.get('tables', [])
-            parsed_data['lines'] = structured_data.get('lines', [])
-            
-            # Save the data in session for the result page
-            session['file_id'] = file_id
-            session['original_path'] = os.path.join('uploads', unique_filename)
-            session['processed_path'] = os.path.join('processed', f"processed_{unique_filename}")
-            session['extracted_text'] = extracted_text
-            session['parsed_data'] = parsed_data
-            session['deskew_enabled'] = enable_deskew
-            
-            # Redirect to result page
-            return redirect(url_for('result', file_id=file_id))
+            # Redirect to result page with process ID
+            return redirect(url_for('result', process_id=process_id))
         else:
             flash('Error processing image')
             return redirect(request.url)
@@ -133,40 +144,51 @@ def upload_file():
         flash('Error processing file')
         return redirect(request.url)
 
-@app.route('/result/<file_id>')
-def result(file_id):
+@app.route('/result/<process_id>')
+def result(process_id):
     """
-    Display OCR results for a processed file.
+    Display the OCR processing results.
     
     Args:
-        file_id (str): Unique ID for the file.
+        process_id (str): The unique ID of the processing session.
         
     Returns:
-        Rendered result template.
+        Rendered template with the results.
     """
     try:
-        # Retrieve data from session
-        if session.get('file_id') != file_id:
-            flash('Session expired or invalid file ID')
+        # Find the files for this process ID
+        original_files = [f for f in os.listdir(app.config['UPLOAD_FOLDER']) if process_id in f]
+        processed_files = [f for f in os.listdir(app.config['PROCESSED_FOLDER']) if process_id in f]
+        
+        if not original_files or not processed_files:
+            flash('Files not found. Please upload the file again.')
             return redirect(url_for('index'))
         
-        original_path = session.get('original_path')
-        processed_path = session.get('processed_path')
-        extracted_text = session.get('extracted_text')
-        parsed_data = session.get('parsed_data')
-        deskew_enabled = session.get('deskew_enabled', True)
+        # Get the first matching file (should be only one)
+        original_filename = original_files[0]
+        processed_filename = processed_files[0]
+        
+        # Construct paths
+        original_path = os.path.join('uploads', original_filename)
+        processed_path = os.path.join('processed', processed_filename)
+        
+        # Read the processed image and extract text
+        processed_image = cv2.imread(os.path.join(app.config['PROCESSED_FOLDER'], processed_filename))
+        extracted_text = ocr_processor.extract_text_from_image(processed_image)
+        
+        # Parse the text
+        parsed_data = data_parser.parse_text(extracted_text)
         
         return render_template(
             'result.html',
             original_path=original_path,
             processed_path=processed_path,
             extracted_text=extracted_text,
-            parsed_data=parsed_data,
-            deskew_enabled=deskew_enabled
+            deskew_enabled=True  # We'll determine this from the filename if needed
         )
     except Exception as e:
-        logger.error(f"Error displaying result: {e}")
-        flash('Error displaying result')
+        logger.error(f"Error displaying results: {e}")
+        flash('Error displaying results. Please try again.')
         return redirect(url_for('index'))
 
 @app.route('/api/extract', methods=['POST'])
@@ -240,10 +262,47 @@ def request_entity_too_large(error):
     return redirect(url_for('index')), 413
 
 @app.errorhandler(500)
-def internal_server_error(error):
-    """Handle internal server error."""
-    flash('Server error')
-    return redirect(url_for('index')), 500
+def internal_error(error):
+    """
+    Handle internal server errors.
+    
+    Args:
+        error: The error that occurred.
+        
+    Returns:
+        Redirect to the index page with an error message.
+    """
+    logger.error(f"Internal server error: {error}")
+    flash('An internal error occurred. Please try again.')
+    return redirect(url_for('index'))
+
+# Add cleanup task to remove old files
+def cleanup_old_files():
+    """
+    Remove files older than 24 hours.
+    """
+    try:
+        current_time = time.time()
+        for folder in [app.config['UPLOAD_FOLDER'], app.config['PROCESSED_FOLDER']]:
+            for filename in os.listdir(folder):
+                file_path = os.path.join(folder, filename)
+                # Skip directories
+                if os.path.isdir(file_path):
+                    continue
+                # Check if file is older than 24 hours
+                if current_time - os.path.getmtime(file_path) > 86400:  # 24 hours in seconds
+                    try:
+                        os.remove(file_path)
+                        logger.info(f"Removed old file: {file_path}")
+                    except Exception as e:
+                        logger.error(f"Error removing file {file_path}: {e}")
+    except Exception as e:
+        logger.error(f"Error in cleanup task: {e}")
+
+# Schedule cleanup task
+@app.before_request
+def before_request():
+    cleanup_old_files()
 
 if __name__ == '__main__':
     app.run(debug=True) 
