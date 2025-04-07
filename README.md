@@ -89,7 +89,3 @@ Run the tests using:
 ```
 python -m unittest tests/test_ocr.py
 ```
-
-## License
-
-MIT License 
