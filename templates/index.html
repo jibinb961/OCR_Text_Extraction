@@ -1,33 +1,33 @@
 {% extends "base.html" %}
 
-{% block title %}Home - Document Scanning and OCR System{% endblock %}
+{% block title %}Home - AI-Powered Invoice OCR System{% endblock %}
 
 {% block content %}
 <div class="row justify-content-center">
     <div class="col-md-8">
         <div class="card shadow">
             <div class="card-header bg-primary text-white">
-                <h2 class="mb-0">Document Scanner</h2>
+                <h2 class="mb-0">Invoice Analyzer</h2>
             </div>
             <div class="card-body">
                 <p class="lead text-center mb-4">
-                    Upload an image of a document (invoice, receipt, or handwritten note) to extract text and key data points.
+                    Upload an invoice image to extract structured data using AI-powered analysis.
                 </p>
                 
                 <form action="{{ url_for('upload_file') }}" method="post" enctype="multipart/form-data" class="mb-4">
                     <div class="mb-3">
-                        <label for="file" class="form-label">Choose an image file:</label>
-                        <input type="file" class="form-control" id="file" name="file" accept=".png,.jpg,.jpeg,.gif,.bmp,.tiff,.tif,.pdf" required>
+                        <label for="file" class="form-label">Choose an invoice image:</label>
+                        <input type="file" class="form-control" id="file" name="file" accept=".png,.jpg,.jpeg,.gif,.bmp,.tiff,.tif" required>
                         <div class="form-text">
-                            Supported formats: PNG, JPG, JPEG, GIF, BMP, TIFF, TIF, PDF
+                            Supported formats: PNG, JPG, JPEG, GIF, BMP, TIFF, TIF
                         </div>
                     </div>
                     
                     <div class="mb-3 form-check">
-                        <input type="checkbox" class="form-check-input" id="enable_deskew" name="enable_deskew">
+                        <input type="checkbox" class="form-check-input" id="enable_deskew" name="enable_deskew" checked>
                         <label class="form-check-label" for="enable_deskew">Enable deskewing (straightening)</label>
                         <div class="form-text">
-                            Uncheck this if your document is already properly oriented but is being incorrectly rotated during processing.
+                            Uncheck this if your invoice is already properly oriented but is being incorrectly rotated during processing.
                         </div>
                     </div>
                     
@@ -44,12 +44,26 @@
                     </div>
                     <div class="card-body">
                         <ol class="mb-0">
-                            <li>Upload an image of your document</li>
-                            <li>The system preprocesses the image to improve OCR accuracy</li>
-                            <li>Tesseract OCR extracts text from the image</li>
-                            <li>Advanced parsing algorithms identify key data points</li>
-                            <li>Results are displayed, showing the extracted information</li>
+                            <li>Upload an image of your invoice</li>
+                            <li>The system preprocesses the image for optimal OCR quality</li>
+                            <li>Tesseract OCR extracts text from the enhanced image</li>
+                            <li>AI-powered LLM analyzes the text to identify structured data</li>
+                            <li>Results display invoice metadata, line items, and summary information</li>
                         </ol>
+                    </div>
+                </div>
+                
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h5 class="mb-0">Key Benefits</h5>
+                    </div>
+                    <div class="card-body">
+                        <ul class="mb-0">
+                            <li><strong>Format Agnostic:</strong> Works with various invoice layouts and formats</li>
+                            <li><strong>Intelligent Extraction:</strong> Uses AI to understand invoice structure</li>
+                            <li><strong>Detailed Results:</strong> Extracts invoice number, dates, customer info, line items, and totals</li>
+                            <li><strong>Time Saving:</strong> Automates manual data entry from invoices</li>
+                        </ul>
                     </div>
                 </div>
             </div>
