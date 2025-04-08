@@ -24,10 +24,13 @@ class OCRProcessor:
         
         Args:
             tesseract_cmd (str, optional): Path to the Tesseract executable.
+                If not provided, it will use the default system path.
         """
+        # Configure Tesseract path if provided
         if tesseract_cmd:
             pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
         
+        # Verify Tesseract is installed
         try:
             pytesseract.get_tesseract_version()
             logger.info("Tesseract OCR is properly configured.")
@@ -62,20 +65,40 @@ class OCRProcessor:
     
     def extract_text_from_image(self, image):
         """
-        Extract text from an already loaded image.
+        Extract text from an image using Tesseract OCR.
         
         Args:
-            image: The image (PIL.Image or numpy array).
+            image: The image to extract text from (numpy array or PIL Image).
             
         Returns:
             str: Extracted text from the image.
         """
         try:
-            # Extract text using Tesseract
-            text = pytesseract.image_to_string(image)
+            # Convert to numpy array if PIL Image
+            if isinstance(image, Image.Image):
+                image = np.array(image)
+            
+            # Make a copy to avoid modifying the original
+            img_for_ocr = image.copy()
+            
+            # Scale up the image to improve thin character recognition (especially for digit "1")
+            if img_for_ocr is not None and len(img_for_ocr.shape) >= 2:
+                height, width = img_for_ocr.shape[:2]
+                # Scale up by 2x for better detail preservation
+                img_for_ocr = cv2.resize(img_for_ocr, (width*2, height*2), interpolation=cv2.INTER_CUBIC)
+            
+            # Configure Tesseract for better digit recognition
+            # --oem 3: Use LSTM OCR engine
+            # --psm 6: Assume a single uniform block of text
+            # -c tessedit_char_whitelist: Specify allowed characters
+            # -c textord_heavy_nr: Reduce noise removal to preserve thin strokes
+            custom_config = r'--oem 3 --psm 6 -c textord_heavy_nr=1'
+            
+            # Extract text using Tesseract with improved configuration
+            text = pytesseract.image_to_string(img_for_ocr, config=custom_config)
             
             # Log success
-            logger.info("Successfully extracted text from image")
+            logger.info(f"Successfully extracted text from image")
             
             return text
         except Exception as e:
@@ -84,32 +107,90 @@ class OCRProcessor:
     
     def extract_structured_data(self, image):
         """
-        Extract structured data from an image with detailed position information.
+        Extract structured data from an image using Tesseract's image_to_data.
         
         Args:
-            image: PIL Image or numpy array
+            image: The image to extract data from (numpy array or PIL Image).
             
         Returns:
-            dict: Structured data including lines, words, and their positions
+            dict: Dictionary containing structured data with positions and confidence levels.
         """
         try:
-            # Get detailed OCR data including positions
-            data = pytesseract.image_to_data(image, output_type=pytesseract.Output.DICT)
+            # Convert to numpy array if PIL Image
+            if isinstance(image, Image.Image):
+                image = np.array(image)
             
-            # Process the data to identify lines and their structure
-            processed_data = self._process_ocr_data(data)
+            # Make a copy and scale up for better recognition
+            img_for_ocr = image.copy()
+            if img_for_ocr is not None and len(img_for_ocr.shape) >= 2:
+                height, width = img_for_ocr.shape[:2]
+                img_for_ocr = cv2.resize(img_for_ocr, (width*2, height*2), interpolation=cv2.INTER_CUBIC)
             
-            # Analyze line content to identify potential tables and line items
-            tables = self._analyze_line_items(processed_data['lines'])
+            # Configure Tesseract for better structured data extraction
+            custom_config = r'--oem 3 --psm 6 -c textord_heavy_nr=1'
             
-            return {
-                'lines': processed_data['lines'],
-                'tables': tables,
-                'raw_data': data
+            # Extract data with positions and confidence levels
+            data = pytesseract.image_to_data(img_for_ocr, output_type=pytesseract.Output.DICT, config=custom_config)
+            
+            # Process the data to create a more usable structure
+            structured_data = {
+                'text': [],
+                'boxes': [],
+                'confidence': [],
+                'lines': [],
+                'tables': []
             }
+            
+            # Group text by line
+            current_line = -1
+            line_text = []
+            
+            for i, text in enumerate(data['text']):
+                if not text.strip():
+                    continue
+                
+                conf = int(data['conf'][i])
+                if conf < 0:  # Skip entries with negative confidence
+                    continue
+                
+                # Add text and its metadata
+                structured_data['text'].append(text)
+                structured_data['confidence'].append(conf)
+                
+                # Scale back bounding box coordinates to match original image
+                x = data['left'][i] // 2
+                y = data['top'][i] // 2
+                w = data['width'][i] // 2
+                h = data['height'][i] // 2
+                structured_data['boxes'].append((x, y, w, h))
+                
+                # Group by line
+                if data['line_num'][i] != current_line:
+                    if line_text:
+                        structured_data['lines'].append(' '.join(line_text))
+                        line_text = []
+                    current_line = data['line_num'][i]
+                line_text.append(text)
+            
+            # Add the last line
+            if line_text:
+                structured_data['lines'].append(' '.join(line_text))
+            
+            # Try to identify table structure (rows and columns)
+            # This requires more sophisticated analysis based on text positions
+            # For now, we'll return the structured data without table analysis
+            
+            logger.info(f"Successfully extracted structured data from image")
+            return structured_data
         except Exception as e:
-            logger.error(f"Error extracting structured data: {e}")
-            return {'lines': [], 'tables': [], 'raw_data': {}}
+            logger.error(f"Error extracting structured data from image: {e}")
+            return {
+                'text': [],
+                'boxes': [],
+                'confidence': [],
+                'lines': [],
+                'tables': []
+            }
     
     def _process_ocr_data(self, data):
         """

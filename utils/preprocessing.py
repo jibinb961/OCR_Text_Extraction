@@ -1,8 +1,8 @@
 """
 Image Preprocessing Module
 
-This module handles various image preprocessing techniques to improve OCR accuracy,
-including resizing, thresholding, noise reduction, and deskewing.
+This module handles preprocessing of document images before OCR.
+It includes functions for resizing, denoising, deskewing, and thresholding.
 """
 
 import cv2
@@ -42,258 +42,218 @@ class ImagePreprocessor:
             logger.error(f"Error loading image from {image_path}: {e}")
             return None
     
-    def resize_image(self, image, target_width=None, scale_factor=None):
+    def resize_image(self, image, max_width=1800):
         """
-        Resize an image to improve OCR processing.
+        Resize an image while maintaining aspect ratio.
         
         Args:
-            image: The image to resize (numpy.ndarray).
-            target_width (int, optional): The target width to resize to.
-            scale_factor (float, optional): Scale factor for resizing.
-            
+            image (numpy.ndarray): Input image.
+            max_width (int, optional): Maximum width of the output image. Defaults to 1800.
+        
         Returns:
             numpy.ndarray: Resized image.
         """
-        try:
-            # Get original dimensions
-            height, width = image.shape[:2]
-            
-            # Determine new dimensions
-            if target_width:
-                ratio = target_width / width
-                new_width = target_width
-                new_height = int(height * ratio)
-            elif scale_factor:
-                new_width = int(width * scale_factor)
-                new_height = int(height * scale_factor)
-            else:
-                # Default scale factor if none provided
-                scale_factor = 1.5
-                new_width = int(width * scale_factor)
-                new_height = int(height * scale_factor)
-            
-            # Resize image
-            resized_image = cv2.resize(image, (new_width, new_height), interpolation=cv2.INTER_CUBIC)
-            
-            logger.info(f"Resized image from {width}x{height} to {new_width}x{new_height}")
-            return resized_image
-        except Exception as e:
-            logger.error(f"Error resizing image: {e}")
-            return image
+        height, width = image.shape[:2]
+        if width > max_width:
+            ratio = max_width / width
+            new_height = int(height * ratio)
+            resized = cv2.resize(image, (max_width, new_height), interpolation=cv2.INTER_AREA)
+            return resized
+        return image
     
-    def convert_to_grayscale(self, image):
-        """
-        Convert an image to grayscale.
-        
-        Args:
-            image: The image to convert (numpy.ndarray).
-            
-        Returns:
-            numpy.ndarray: Grayscale image.
-        """
-        try:
-            # Check if image is already grayscale
-            if len(image.shape) == 2:
-                return image
-            
-            # Convert to grayscale
-            gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-            
-            logger.info("Converted image to grayscale")
-            return gray_image
-        except Exception as e:
-            logger.error(f"Error converting image to grayscale: {e}")
-            return image
-    
-    def apply_thresholding(self, image, method='adaptive'):
-        """
-        Apply thresholding to an image to improve text contrast.
-        
-        Args:
-            image: The grayscale image (numpy.ndarray).
-            method (str): Thresholding method ('simple', 'otsu', or 'adaptive').
-            
-        Returns:
-            numpy.ndarray: Thresholded image.
-        """
-        try:
-            # Ensure image is grayscale
-            if len(image.shape) > 2:
-                image = self.convert_to_grayscale(image)
-            
-            # Apply thresholding based on method
-            if method == 'simple':
-                _, thresholded = cv2.threshold(image, 127, 255, cv2.THRESH_BINARY)
-            elif method == 'otsu':
-                _, thresholded = cv2.threshold(image, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-            elif method == 'adaptive':
-                thresholded = cv2.adaptiveThreshold(
-                    image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2
-                )
-            else:
-                # Default to adaptive thresholding
-                thresholded = cv2.adaptiveThreshold(
-                    image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2
-                )
-            
-            logger.info(f"Applied {method} thresholding")
-            return thresholded
-        except Exception as e:
-            logger.error(f"Error applying thresholding: {e}")
-            return image
-    
-    def remove_noise(self, image):
+    def denoise_image(self, image):
         """
         Remove noise from an image.
         
         Args:
-            image: The image (numpy.ndarray).
+            image (numpy.ndarray): Input grayscale image.
+        
+        Returns:
+            numpy.ndarray: Denoised image.
+        """
+        # Use fastNlMeansDenoising to preserve edges better than median blur
+        denoised = cv2.fastNlMeansDenoising(image, None, 10, 7, 21)
+        return denoised
+    
+    def enhance_thin_characters(self, image):
+        """
+        Apply morphological operations to enhance thin characters like digit "1".
+        
+        Args:
+            image (numpy.ndarray): Binary image after thresholding.
             
         Returns:
-            numpy.ndarray: Noise-reduced image.
+            numpy.ndarray: Enhanced image.
         """
-        try:
-            # Ensure image is grayscale
-            if len(image.shape) > 2:
-                image = self.convert_to_grayscale(image)
-            
-            # Apply noise reduction
-            denoised = cv2.fastNlMeansDenoising(image, None, 10, 7, 21)
-            
-            logger.info("Applied noise reduction")
-            return denoised
-        except Exception as e:
-            logger.error(f"Error removing noise: {e}")
-            return image
+        # Create a small structuring element for morphological operations
+        kernel = np.ones((2, 2), np.uint8)
+        
+        # Apply a slight dilation to thicken thin strokes
+        dilated = cv2.dilate(image, kernel, iterations=1)
+        
+        # Apply opening to remove small noise while preserving character shapes
+        opened = cv2.morphologyEx(dilated, cv2.MORPH_OPEN, kernel)
+        
+        return opened
     
     def deskew(self, image):
         """
-        Deskew (straighten) an image.
+        Deskew (straighten) a document image.
         
         Args:
-            image: The image (numpy.ndarray).
-            
+            image (numpy.ndarray): Input grayscale image.
+        
         Returns:
             numpy.ndarray: Deskewed image.
         """
         try:
-            # Ensure image is grayscale
-            if len(image.shape) > 2:
-                gray = self.convert_to_grayscale(image)
-            else:
-                gray = image.copy()
-            
-            # Apply threshold
-            _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
-            
             # Find all contours
-            contours, _ = cv2.findContours(thresh, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+            contours, _ = cv2.findContours(image, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
             
-            # Find largest contour
-            contours = sorted(contours, key=cv2.contourArea, reverse=True)
+            # If no contours found, return original image
             if not contours:
-                logger.info("No contours found for deskewing, returning original image")
+                logger.warning("No contours found for deskewing, returning original image")
                 return image
             
-            # Get rotated rectangle of largest contour
-            rect = cv2.minAreaRect(contours[0])
+            # Find the largest contour by area (assumed to be the document)
+            areas = [cv2.contourArea(c) for c in contours]
+            max_contour = contours[np.argmax(areas)]
+            
+            # Get the minimum area rectangle
+            rect = cv2.minAreaRect(max_contour)
             angle = rect[2]
             
-            # Improved angle adjustment logic
-            # OpenCV's minAreaRect returns angles in the range [-90, 0)
-            # We need to determine if we need to correct the orientation
+            # Determine if image is landscape or portrait
+            is_portrait = rect[1][0] < rect[1][1]  # width < height
             
-            # First check if the angle is significant enough to warrant correction
-            # Only rotate if the angle is more than 5 degrees off horizontal/vertical
-            if abs(angle) < 5 or abs(angle + 90) < 5:
-                logger.info(f"Image is already well-aligned (angle: {angle:.2f}), skipping deskew")
-                return image
-                
-            # Correct the angle based on aspect ratio to avoid incorrect 90 degree rotations
-            width, height = rect[1]
-            if width < height:
-                # If width < height, we're looking at a rectangle in portrait orientation
-                if angle < -45:
-                    angle = 90 + angle
-            else:
-                # Width >= height, we're looking at a rectangle in landscape orientation
-                # Adjust angle to preserve the correct orientation
-                if angle >= -45:
-                    angle = angle
+            # Adjust angle based on orientation
+            # Only deskew if the angle is significantly off
+            if is_portrait:
+                # For portrait, adjust angles near 0, 90, 180, 270
+                if -5 < angle < 5:
+                    return image  # Close to horizontal, no deskew needed
+                elif 85 < angle < 95:
+                    angle = angle - 90
+                elif -95 < angle < -85:
+                    angle = angle + 90
                 else:
-                    angle = 90 + angle
+                    # Adjust angle to get closer to horizontal/vertical
+                    if angle > 45:
+                        angle = angle - 90
+                    elif angle < -45:
+                        angle = angle + 90
+            else:
+                # For landscape, adjust angles near 0, 90, 180, 270
+                if -5 < angle < 5:
+                    return image  # Close to horizontal, no deskew needed
+                elif 85 < angle < 95:
+                    angle = angle - 90
+                elif -95 < angle < -85:
+                    angle = angle + 90
+                else:
+                    # For landscape orientation, no need for extra adjustments
+                    pass
             
-            # Rotate image
+            # If angle is very small, don't rotate to avoid unnecessary distortion
+            if -1 < angle < 1:
+                return image
+            
+            # Get the rotation matrix
             (h, w) = image.shape[:2]
             center = (w // 2, h // 2)
             M = cv2.getRotationMatrix2D(center, angle, 1.0)
-            rotated = cv2.warpAffine(image, M, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
+            
+            # Perform the rotation
+            rotated = cv2.warpAffine(
+                image, M, (w, h),
+                flags=cv2.INTER_CUBIC,
+                borderMode=cv2.BORDER_CONSTANT,
+                borderValue=255
+            )
             
             logger.info(f"Deskewed image by {angle:.2f} degrees")
             return rotated
         except Exception as e:
-            logger.error(f"Error deskewing image: {e}")
+            logger.error(f"Error during deskewing: {e}")
             return image
     
     def process_image(self, image_path, resize=True, denoise=True, deskew_image=True, threshold_method='adaptive'):
         """
-        Apply a full preprocessing pipeline to an image.
+        Process an image for better OCR results.
         
         Args:
             image_path (str): Path to the image file.
-            resize (bool): Whether to resize the image.
-            denoise (bool): Whether to remove noise.
-            deskew_image (bool): Whether to deskew the image.
-            threshold_method (str): Thresholding method.
-            
+            resize (bool, optional): Whether to resize the image. Defaults to True.
+            denoise (bool, optional): Whether to denoise the image. Defaults to True.
+            deskew_image (bool, optional): Whether to deskew the image. Defaults to True.
+            threshold_method (str, optional): Thresholding method ('adaptive', 'otsu', or None). 
+                                            Defaults to 'adaptive'.
+        
         Returns:
             numpy.ndarray: Processed image.
         """
         try:
-            # Load image
-            image = self.load_image(image_path)
+            # Read the image
+            image = cv2.imread(image_path)
             if image is None:
+                logger.error(f"Could not read image from {image_path}")
                 return None
             
-            # Make a copy to avoid modifying the original
-            processed = image.copy()
+            # Convert to grayscale if not already
+            if len(image.shape) == 3:
+                gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            else:
+                gray = image.copy()
             
-            # Convert to grayscale
-            processed = self.convert_to_grayscale(processed)
-            
-            # Apply preprocessing steps
+            # Resize image if needed
             if resize:
-                processed = self.resize_image(processed)
+                gray = self.resize_image(gray)
             
+            # Denoise the image (remove noise)
             if denoise:
-                processed = self.remove_noise(processed)
+                gray = self.denoise_image(gray)
             
+            # Deskew the image (straighten)
             if deskew_image:
-                processed = self.deskew(processed)
+                gray = self.deskew(gray)
             
-            # Apply thresholding
-            processed = self.apply_thresholding(processed, method=threshold_method)
+            # Apply thresholding based on the specified method
+            if threshold_method == 'adaptive':
+                # Use a gentler adaptive threshold to preserve thin strokes like digit "1"
+                processed = cv2.adaptiveThreshold(
+                    gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+                    cv2.THRESH_BINARY, 11, 2  # Smaller block size (11) and constant (2) for better detail
+                )
+            elif threshold_method == 'otsu':
+                # Apply Gaussian blur before Otsu's method to reduce noise while preserving details
+                blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+                _, processed = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            else:
+                processed = gray
             
-            logger.info(f"Completed image preprocessing for {image_path}")
+            # Apply additional processing to enhance thin characters
+            processed = self.enhance_thin_characters(processed)
+            
+            logger.info(f"Successfully processed image from {image_path}")
             return processed
         except Exception as e:
-            logger.error(f"Error during image preprocessing: {e}")
+            logger.error(f"Error processing image {image_path}: {e}")
             return None
     
     def save_image(self, image, output_path):
         """
-        Save an image to a file.
+        Save a processed image to disk.
         
         Args:
-            image: The image to save (numpy.ndarray).
+            image (numpy.ndarray): Image to save.
             output_path (str): Path to save the image to.
-            
+        
         Returns:
-            bool: True if saving was successful, False otherwise.
+            bool: True if successful, False otherwise.
         """
         try:
             cv2.imwrite(output_path, image)
-            logger.info(f"Saved image to {output_path}")
+            logger.info(f"Saved processed image to {output_path}")
             return True
         except Exception as e:
             logger.error(f"Error saving image to {output_path}: {e}")
